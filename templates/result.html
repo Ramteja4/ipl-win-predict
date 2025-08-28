@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>IPL Win Prediction</title>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Oswald:wght@300;500&display=swap');
+
+      :root {
+        --stadium-green: #3d9970;
+        --pitch-color: #228B22;
+        --neon-blue: #00f3ff;
+        --neon-red: #ff073a;
+      }
+
+      body {
+        font-family: 'Oswald', sans-serif;
+        background: linear-gradient(0deg, #1a1a1a 0%, #2a2a2a 100%);
+        min-height: 100vh;
+        margin: 0;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        overflow: hidden;
+      }
+
+      .stadium {
+        position: relative;
+        width: 800px;
+        height: 500px;
+        background: var(--stadium-green);
+        border-radius: 20px;
+        box-shadow: 0 0 50px rgba(0,0,0,0.5);
+        overflow: hidden;
+      }
+
+      .pitch {
+        position: absolute;
+        bottom: 0;
+        width: 100%;
+        height: 70%;
+        background: var(--pitch-color);
+        clip-path: polygon(0 30%, 100% 0, 100% 100%, 0% 100%);
+      }
+
+      .prediction-board {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: 80%;
+        background: rgba(0, 0, 0, 0.263);
+        padding: 30px;
+        border: 3px solid gold;
+        border-radius: 15px;
+        text-align: center;
+        z-index: 3;
+      }
+
+      .teams-container {
+        display: flex;
+        justify-content: space-between;
+        margin: 30px 0;
+        position: relative;
+      }
+
+      .team {
+        flex: 1;
+        padding: 20px;
+        transition: 0.3s all;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      }
+
+      .team-logo {
+        width: 100px;
+        height: 100px;
+        object-fit: contain;
+        margin-bottom: 15px;
+        border: 3px solid #fff;
+        border-radius: 50%;
+        padding: 5px;
+        background: linear-gradient(45deg, #ffffff30, #ffffff10);
+        backdrop-filter: blur(5px);
+        transition: transform 0.3s ease;
+      }
+
+      .team:hover .team-logo {
+        transform: scale(1.1) rotate(-5deg);
+      }
+
+      .team[style*="neon-blue"] .team-logo {
+        border-color: var(--neon-blue);
+      }
+
+      .team[style*="neon-red"] .team-logo {
+        border-color: var(--neon-red);
+      }
+
+      .team-name {
+        font-family: 'Bebas Neue', cursive;
+        font-size: 2.5rem;
+        color: white;
+        letter-spacing: 3px;
+        margin-bottom: 10px;
+        max-width: 150px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .probability {
+        font-size: 3rem;
+        color: var(--neon-blue);
+        text-shadow: 0 0 10px var(--neon-blue);
+        position: relative;
+      }
+
+      .versus {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        font-size: 2.5rem;
+        color: gold;
+        text-shadow: 0 0 15px gold;
+        background: rgba(0,0,0,0.7);
+        padding: 0 20px;
+        border-radius: 50%;
+        z-index: 4;
+      }
+
+      .progress-track {
+        width: 100%;
+        height: 20px;
+        background: rgba(255,255,255,0.1);
+        border-radius: 10px;
+        overflow: hidden;
+        position: relative;
+      }
+
+      .progress-fill {
+        height: 100%;
+        background: linear-gradient(90deg, var(--neon-blue) 0%, gold 100%);
+        width: {{ probability }}%;
+        transition: 1s width ease-out;
+        position: relative;
+      }
+
+      .progress-fill::after {
+        content: '';
+        position: absolute;
+        right: -10px;
+        top: -5px;
+        width: 30px;
+        height: 30px;
+        background: gold;
+        border-radius: 50%;
+        box-shadow: 0 0 20px gold;
+      }
+
+      .wickets {
+        position: absolute;
+        bottom: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        display: flex;
+        gap: 10px;
+        z-index: 2;
+      }
+
+      .wicket {
+        width: 15px;
+        height: 50px;
+        background: #8B4513;
+        position: relative;
+      }
+
+      .wicket::after {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 3px;
+        height: 30px;
+        background: white;
+      }
+
+      /* Realistic Bat Design */
+      @keyframes batSwing {
+        0% { transform: rotate(25deg) translateY(0); }
+        50% { transform: rotate(-10deg) translateY(-20px); }
+        100% { transform: rotate(25deg) translateY(0); }
+      }
+
+      .cricket-bat {
+        position: absolute;
+        left: 12%;
+        top: 20%;
+        width: 45px;
+        height: 180px;
+        transform-origin: bottom center;
+        animation: batSwing 1.8s ease-in-out infinite;
+        z-index: 2;
+        filter: drop-shadow(2px 2px 5px rgba(0,0,0,0.5));
+      }
+
+      .bat-blade {
+        position: absolute;
+        width: 100%;
+        height: 80%;
+        background: linear-gradient(
+          to right,
+          #8B4513 0%,
+          #A0522D 30%,
+          #8B4513 70%,
+          #6B3E2E 100%
+        );
+        border-radius: 8px 8px 2px 2px;
+        clip-path: polygon(0 0, 100% 0, 90% 100%, 10% 100%);
+      }
+
+      .bat-blade::after {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(
+          45deg,
+          transparent 40%,
+          rgba(0,0,0,0.1) 50%,
+          transparent 60%
+        );
+        border-radius: inherit;
+      }
+
+      .bat-handle {
+        position: absolute;
+        bottom: -20px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 20px;
+        height: 32.7%;
+        background: linear-gradient(
+          to right,
+          #5A2D18 0%,
+          #4A2512 50%,
+          #5A2D18 100%
+        );
+        border-radius: 8px;
+        box-shadow:
+          inset 0 0 8px rgba(0,0,0,0.3),
+          0 2px 3px rgba(0,0,0,0.2);
+      }
+
+      .bat-handle::after {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 110%;
+        height: 80%;
+        background: repeating-linear-gradient(
+          -45deg,
+          #333,
+          #333 3px,
+          #444 3px,
+          #444 6px
+        );
+        border-radius: 6px;
+      }
+
+      .bat-toe {
+        position: absolute;
+        bottom: -5px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 110%;
+        height: 8px;
+        background: #2B1A0F;
+        border-radius: 2px;
+      }
+
+      /* Ball Animation */
+      @keyframes ball {
+        0% { transform: translateY(0) rotate(0deg); }
+        50% { transform: translateY(-100px) rotate(180deg); }
+        100% { transform: translateY(0) rotate(360deg); }
+      }
+
+      .cricket-ball {
+        position: absolute;
+        top: 20%;
+        right: 10%;
+        width: 40px;
+        height: 40px;
+        background: radial-gradient(circle at 30% 30%, #ffffff, #8B4513);
+        border-radius: 50%;
+        animation: ball 2s infinite;
+        z-index: 1;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="stadium">
+      <div class="cricket-bat">
+        <div class="bat-blade">
+          <div class="bat-toe"></div>
+        </div>
+        <div class="bat-handle"></div>
+      </div>
+      <div class="pitch"></div>
+      <div class="cricket-ball"></div>
+
+      <div class="prediction-board">
+        <div class="teams-container">
+          <div class="team" style="border-right: 2px solid var(--neon-blue)">
+            <img
+              src="/static/team_logos/{{ batting_team }}.png"
+              class="team-logo"
+              alt="{{ batting_team }} Logo"
+            />
+            <div class="team-name">{{ batting_team }}</div>
+            <div class="probability">{{ probability | round(2) }}%</div>
+          </div>
+
+          <div class="versus">VS</div>
+
+          <div class="team" style="border-left: 2px solid var(--neon-red)">
+            <img
+              src="/static/team_logos/{{ bowling_team }}.png"
+              class="team-logo"
+              alt="{{ bowling_team }} Logo"
+            />
+            <div class="team-name">{{ bowling_team }}</div>
+            <div class="probability">{{ (100 - probability) | round(2) }}%</div>
+          </div>
+        </div>
+
+        <div class="progress-track">
+          <div class="progress-fill"></div>
+        </div>
+      </div>
+
+      <div class="wickets">
+        <div class="wicket"></div>
+        <div class="wicket"></div>
+        <div class="wicket"></div>
+      </div>
+    </div>
+
+    <script>
+      // Logo error handling
+      document.querySelectorAll(".team-logo").forEach((img) => {
+        img.onerror = function () {
+          this.src = "/static/team_logos/default.png";
+          this.style.opacity = "0.5";
+          this.nextElementSibling.textContent += " (Logo Missing)";
+        };
+      });
+
+      // Animate progress bar on load
+      window.addEventListener("load", () => {
+        const progress = document.querySelector(".progress-fill");
+        progress.style.width = "{{ probability }}%";
+      });
+    </script>
+  </body>
+</html>
