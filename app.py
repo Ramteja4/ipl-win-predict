@@ -1,79 +1,58 @@
-# app.py
-# Streamlit app that loads win_prob_model.pkl and performs prediction.
-
-import streamlit as st
+from flask import Flask, render_template, request
+import pickle
 import pandas as pd
-import numpy as np
-import joblib
 import os
-import traceback
+import warnings
 
-st.set_page_config(page_title="IPL Win Predictor", layout="centered")
+# Suppress scikit-learn version mismatch warnings (optional)
+warnings.filterwarnings("ignore", category=UserWarning, module='sklearn')
 
-st.title("IPL Win Predictor")
-st.write("This app loads `win_prob_model.pkl` and predicts win probability based on your inputs.")
+app = Flask(__name__)
 
-MODEL_PATH = "win_prob_model.pkl"
+# Load your trained pipeline
+with open('win_prob_model.pkl', 'rb') as f:
+    model = pickle.load(f)
 
-@st.cache_resource
-def load_model():
-    if not os.path.exists(MODEL_PATH):
-        return None, "Model file `win_prob_model.pkl` not found in repo root."
-    try:
-        model = joblib.load(MODEL_PATH)
-        return model, None
-    except Exception as e:
-        return None, f"Error loading model: {e}"
+@app.route('/')
+def index():
+    return render_template('index.html')
 
-model, load_error = load_model()
+@app.route('/predict', methods=['POST'])
+def predict():
+    # Get data from form
+    batting_team = request.form.get('batting_team')
+    bowling_team = request.form.get('bowling_team')
+    venue = request.form.get('venue')
+    target_score = float(request.form.get('target_score'))
+    current_score = float(request.form.get('current_score'))
+    wickets_lost = int(request.form.get('wickets_lost'))
+    overs_completed = float(request.form.get('overs_completed'))
+    
+    # Create a DataFrame to match the training columns
+    input_df = pd.DataFrame({
+        'batting_team': [batting_team],
+        'bowling_team': [bowling_team],
+        'venue': [venue],
+        'target': [target_score],
+        'current_score': [current_score],
+        'wickets': [wickets_lost],
+        'overs': [overs_completed]
+    })
+    
+    # Predict probability of the batting team winning (class=1)
+    probability = model.predict_proba(input_df)[0][1] * 100
+    probability = round(probability, 2)
 
-if load_error:
-    st.error(load_error)
-    st.info("Please upload `win_prob_model.pkl` to the root of your GitHub repository and redeploy.")
-    st.stop()
+    # Render the result page with the probability bar
+    return render_template(
+        'result.html', 
+        probability=probability,
+        batting_team=batting_team,
+        bowling_team=bowling_team
+    )
 
-st.subheader("Enter Match Details")
+if __name__ == '__main__':
+    # Use Render's PORT if available, otherwise default to 5000
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port)
 
-with st.form("prediction_form"):
-    batting_team = st.text_input("Batting Team", "CSK")
-    bowling_team = st.text_input("Bowling Team", "MI")
-    city = st.text_input("City", "Mumbai")
-
-    runs_left = st.number_input("Runs Left", min_value=0, value=50)
-    balls_left = st.number_input("Balls Left", min_value=0, value=30)
-    wickets_left = st.number_input("Wickets Left", min_value=0, max_value=10, value=5)
-    total_runs_x = st.number_input("Target Runs", min_value=0, value=180)
-    crr = st.number_input("Current Run Rate (CRR)", min_value=0.0, value=8.5)
-    rrr = st.number_input("Required Run Rate (RRR)", min_value=0.0, value=9.0)
-
-    submit = st.form_submit_button("Predict Win Probability")
-
-if submit:
-    try:
-        # Create input DataFrame exactly as model expects
-        input_data = pd.DataFrame({
-            "batting_team": [batting_team],
-            "bowling_team": [bowling_team],
-            "city": [city],
-            "runs_left": [runs_left],
-            "balls_left": [balls_left],
-            "wickets_left": [wickets_left],
-            "total_runs_x": [total_runs_x],
-            "crr": [crr],
-            "rrr": [rrr],
-        })
-
-        st.write("Input Data:")
-        st.dataframe(input_data)
-
-        # Try predict_proba first
-        if hasattr(model, "predict_proba"):
-            proba = model.predict_proba(input_data)[0][1]  # probability of win
-            st.success(f"Win Probability: **{proba * 100:.2f}%**")
-        else:
-            pred = model.predict(input_data)[0]
-            st.success(f"Predicted Outcome: **{pred}**")
-
-    except Exception as e:
-        st.error("Prediction failed!")
-        st.code(traceback.format_exc())
