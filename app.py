@@ -1,64 +1,79 @@
 # app.py
-# Minimal Streamlit app wrapper for IPL win prediction.
-# Replace the dummy model logic below with your real model loading/prediction code.
+# Streamlit app that loads win_prob_model.pkl and performs prediction.
 
 import streamlit as st
 import pandas as pd
 import numpy as np
 import joblib
 import os
+import traceback
 
 st.set_page_config(page_title="IPL Win Predictor", layout="centered")
 
 st.title("IPL Win Predictor")
-st.write("Simple demo: enter some basic match inputs and click Predict.")
+st.write("This app loads `win_prob_model.pkl` and predicts win probability based on your inputs.")
 
-# --- Input form ---
-with st.form("predict_form"):
-    team1 = st.text_input("Team 1 (Home)", value="TeamA")
-    team2 = st.text_input("Team 2 (Away)", value="TeamB")
-    toss_winner = st.selectbox("Toss winner", options=[team1, team2])
-    city = st.text_input("City", value="Mumbai")
-    overs = st.slider("Overs completed", 0, 20, 10)
-    submit = st.form_submit_button("Predict")
+MODEL_PATH = "win_prob_model.pkl"
 
-# --- Prediction logic (placeholder) ---
+@st.cache_resource
 def load_model():
-    # Try to load a saved model 'model.joblib' from repo root (if you have it).
-    # If not present, we use a dummy fallback.
-    model_path = "model.joblib"
-    if os.path.exists(model_path):
-        try:
-            return joblib.load(model_path)
-        except Exception as e:
-            st.warning(f"Failed loading model.joblib: {e}")
-            return None
-    return None
+    if not os.path.exists(MODEL_PATH):
+        return None, "Model file `win_prob_model.pkl` not found in repo root."
+    try:
+        model = joblib.load(MODEL_PATH)
+        return model, None
+    except Exception as e:
+        return None, f"Error loading model: {e}"
 
-model = load_model()
+model, load_error = load_model()
 
-def make_features(team1, team2, toss_winner, city, overs):
-    # Convert inputs to a simple numeric feature vector as example placeholder.
-    # Replace this with the exact features your real model expects.
-    return np.array([[len(team1), len(team2), 1 if toss_winner==team1 else 0, len(city), overs]])
+if load_error:
+    st.error(load_error)
+    st.info("Please upload `win_prob_model.pkl` to the root of your GitHub repository and redeploy.")
+    st.stop()
+
+st.subheader("Enter Match Details")
+
+with st.form("prediction_form"):
+    batting_team = st.text_input("Batting Team", "CSK")
+    bowling_team = st.text_input("Bowling Team", "MI")
+    city = st.text_input("City", "Mumbai")
+
+    runs_left = st.number_input("Runs Left", min_value=0, value=50)
+    balls_left = st.number_input("Balls Left", min_value=0, value=30)
+    wickets_left = st.number_input("Wickets Left", min_value=0, max_value=10, value=5)
+    total_runs_x = st.number_input("Target Runs", min_value=0, value=180)
+    crr = st.number_input("Current Run Rate (CRR)", min_value=0.0, value=8.5)
+    rrr = st.number_input("Required Run Rate (RRR)", min_value=0.0, value=9.0)
+
+    submit = st.form_submit_button("Predict Win Probability")
 
 if submit:
-    st.write("Running prediction...")
-    X = make_features(team1, team2, toss_winner, city, overs)
-    if model is not None:
-        try:
-            pred_proba = model.predict_proba(X)
-            pred_label = model.predict(X)
-            st.success(f"Predicted winner: **{pred_label[0]}**")
-            st.write(f"Probability: {pred_proba[0].round(3)}")
-        except Exception as e:
-            st.error("Model present but prediction failed. (Maybe feature mismatch.)")
-            st.write(repr(e))
-    else:
-        # Dummy fallback: predict team with longer name (just as demo)
-        demo_winner = team1 if len(team1) >= len(team2) else team2
-        st.info("No saved model found. Showing demo prediction.")
-        st.write(f"Predicted winner (demo): **{demo_winner}**")
+    try:
+        # Create input DataFrame exactly as model expects
+        input_data = pd.DataFrame({
+            "batting_team": [batting_team],
+            "bowling_team": [bowling_team],
+            "city": [city],
+            "runs_left": [runs_left],
+            "balls_left": [balls_left],
+            "wickets_left": [wickets_left],
+            "total_runs_x": [total_runs_x],
+            "crr": [crr],
+            "rrr": [rrr],
+        })
 
-st.markdown("---")
-st.write("If you have a trained model file named `model.joblib` in the repo root, the app will try to use it.")
+        st.write("Input Data:")
+        st.dataframe(input_data)
+
+        # Try predict_proba first
+        if hasattr(model, "predict_proba"):
+            proba = model.predict_proba(input_data)[0][1]  # probability of win
+            st.success(f"Win Probability: **{proba * 100:.2f}%**")
+        else:
+            pred = model.predict(input_data)[0]
+            st.success(f"Predicted Outcome: **{pred}**")
+
+    except Exception as e:
+        st.error("Prediction failed!")
+        st.code(traceback.format_exc())
