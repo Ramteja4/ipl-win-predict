@@ -1,57 +1,64 @@
-from flask import Flask, render_template, request
-import pickle
+# app.py
+# Minimal Streamlit app wrapper for IPL win prediction.
+# Replace the dummy model logic below with your real model loading/prediction code.
+
+import streamlit as st
 import pandas as pd
+import numpy as np
+import joblib
 import os
-import warnings
 
-# Suppress scikit-learn version mismatch warnings (optional)
-warnings.filterwarnings("ignore", category=UserWarning, module='sklearn')
+st.set_page_config(page_title="IPL Win Predictor", layout="centered")
 
-app = Flask(__name__)
+st.title("IPL Win Predictor")
+st.write("Simple demo: enter some basic match inputs and click Predict.")
 
-# Load your trained pipeline
-with open('win_prob_model.pkl', 'rb') as f:
-    model = pickle.load(f)
+# --- Input form ---
+with st.form("predict_form"):
+    team1 = st.text_input("Team 1 (Home)", value="TeamA")
+    team2 = st.text_input("Team 2 (Away)", value="TeamB")
+    toss_winner = st.selectbox("Toss winner", options=[team1, team2])
+    city = st.text_input("City", value="Mumbai")
+    overs = st.slider("Overs completed", 0, 20, 10)
+    submit = st.form_submit_button("Predict")
 
-@app.route('/')
-def index():
-    return render_template('index.html')
+# --- Prediction logic (placeholder) ---
+def load_model():
+    # Try to load a saved model 'model.joblib' from repo root (if you have it).
+    # If not present, we use a dummy fallback.
+    model_path = "model.joblib"
+    if os.path.exists(model_path):
+        try:
+            return joblib.load(model_path)
+        except Exception as e:
+            st.warning(f"Failed loading model.joblib: {e}")
+            return None
+    return None
 
-@app.route('/predict', methods=['POST'])
-def predict():
-    # Get data from form
-    batting_team = request.form.get('batting_team')
-    bowling_team = request.form.get('bowling_team')
-    venue = request.form.get('venue')
-    target_score = float(request.form.get('target_score'))
-    current_score = float(request.form.get('current_score'))
-    wickets_lost = int(request.form.get('wickets_lost'))
-    overs_completed = float(request.form.get('overs_completed'))
-    
-    # Create a DataFrame to match the training columns
-    input_df = pd.DataFrame({
-        'batting_team': [batting_team],
-        'bowling_team': [bowling_team],
-        'venue': [venue],
-        'target': [target_score],
-        'current_score': [current_score],
-        'wickets': [wickets_lost],
-        'overs': [overs_completed]
-    })
-    
-    # Predict probability of the batting team winning (class=1)
-    probability = model.predict_proba(input_df)[0][1] * 100
-    probability = round(probability, 2)
+model = load_model()
 
-    # Render the result page with the probability bar
-    return render_template(
-        'result.html', 
-        probability=probability,
-        batting_team=batting_team,
-        bowling_team=bowling_team
-    )
+def make_features(team1, team2, toss_winner, city, overs):
+    # Convert inputs to a simple numeric feature vector as example placeholder.
+    # Replace this with the exact features your real model expects.
+    return np.array([[len(team1), len(team2), 1 if toss_winner==team1 else 0, len(city), overs]])
 
-if __name__ == '__main__':
-    # Use Render's PORT if available, otherwise default to 5000
-    port = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=port)
+if submit:
+    st.write("Running prediction...")
+    X = make_features(team1, team2, toss_winner, city, overs)
+    if model is not None:
+        try:
+            pred_proba = model.predict_proba(X)
+            pred_label = model.predict(X)
+            st.success(f"Predicted winner: **{pred_label[0]}**")
+            st.write(f"Probability: {pred_proba[0].round(3)}")
+        except Exception as e:
+            st.error("Model present but prediction failed. (Maybe feature mismatch.)")
+            st.write(repr(e))
+    else:
+        # Dummy fallback: predict team with longer name (just as demo)
+        demo_winner = team1 if len(team1) >= len(team2) else team2
+        st.info("No saved model found. Showing demo prediction.")
+        st.write(f"Predicted winner (demo): **{demo_winner}**")
+
+st.markdown("---")
+st.write("If you have a trained model file named `model.joblib` in the repo root, the app will try to use it.")
