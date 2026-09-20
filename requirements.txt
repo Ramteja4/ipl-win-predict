@@ -2,3 +2,4 @@ numpy
 pandas
 scikit-learn==1.8.0
 flask
+gunicorn
